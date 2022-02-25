@@ -1,102 +1,135 @@
-var HawkStrategy = require('../lib/strategy'),
-  Hawk = require('hawk'),
-  should = require('should');
+var HawkStrategy = require("../lib/strategy"),
+  Hawk = require("hawk"),
+  should = require("should"),
+  buildRequest = require("./reqMock").buildRequest;
 
 var credentials = {
-  key: 'abcd',
-  algorithm: 'sha256',
-  user: 'tito',
-  id: 'dasd123'
+  key: "abcd",
+  algorithm: "sha256",
+  user: "tito",
+  id: "dasd123",
 };
 
-var strategy = new HawkStrategy({ bewit: true }, function(id, done) {
+var strategy = new HawkStrategy({ bewit: true }, function (id, done) {
   if (id === credentials.id) return done(null, credentials);
   return done(null, null);
 });
 
-
-describe('passport-hawk with bewit', function() {
-
-  it('can authenticate a request with a correct header', function(testDone) {
-    var bewit = Hawk.uri.getBewit('http://example.com:8080/resource/4?filter=a', {
-      credentials: credentials,
-      ttlSec: 60 * 5
-    });
-    var req = {
+describe("passport-hawk with bewit", function () {
+  it("can authenticate a request with a correct header", function (testDone) {
+    var bewit = Hawk.uri.getBewit(
+      "http://example.com:8080/resource/4?filter=a",
+      {
+        credentials: credentials,
+        ttlSec: 60 * 5,
+      }
+    );
+    var req = buildRequest({
       headers: {
-        host: 'example.com:8080'
+        host: "example.com:8080",
       },
-      method: 'GET',
-      url: '/resource/4?filter=a&bewit=' + bewit
-    };
+      method: "GET",
+      url: "/resource/4?filter=a&bewit=" + bewit,
+    });
 
-    strategy.success = function(user) {
-      user.should.eql('tito');
+    strategy.success = function (user) {
+      user.should.eql("tito");
       testDone();
     };
 
-    strategy.error = function() {
+    strategy.error = function () {
       testDone(new Error(arguments));
     };
     strategy.authenticate(req);
   });
 
-  it('should properly fail with correct challenge code when using different url', function(testDone) {
-    var bewit = Hawk.uri.getBewit('http://example.com:8080/resource/4?filter=a' + bewit, {
-      credentials: credentials,
-      ttlSec: 60 * 5
-    });
-    var req = {
+  it("does not modifies req.url when is available", function (testDone) {
+    var bewit = Hawk.uri.getBewit(
+      "http://example.com:8080/resource/4?filter=a",
+      {
+        credentials: credentials,
+        ttlSec: 60 * 5,
+      }
+    );
+    var req = buildRequest({
       headers: {
-        host: 'example.com:8080'
+        host: "example.com:8080",
       },
-      method: 'GET',
-      url: '/resource/4?filter=a&bewit=' + bewit
+      method: "GET",
+      url: "/abc",
+      originalUrl: "/resource/4?filter=a&bewit=" + bewit,
+    });
+
+    strategy.success = function (user) {
+      req.url.should.eql("/abc");
+
+      testDone();
     };
-    strategy.error = function(challenge) {
-      challenge.message.should.eql('Bad mac');
+
+    strategy.error = function () {
+      testDone(new Error(arguments));
+    };
+    strategy.authenticate(req);
+  });
+
+  it("should properly fail with correct challenge code when using different url", function (testDone) {
+    var bewit = Hawk.uri.getBewit(
+      "http://example.com:8080/resource/4?filter=a" + bewit,
+      {
+        credentials: credentials,
+        ttlSec: 60 * 5,
+      }
+    );
+    var req = buildRequest({
+      headers: {
+        host: "example.com:8080",
+      },
+      method: "GET",
+      url: "/resource/4?filter=a&bewit=" + bewit,
+    });
+    strategy.error = function (challenge) {
+      challenge.message.should.eql("Bad mac");
       testDone();
     };
     strategy.authenticate(req);
   });
 
-  it('should call done with false when the id doesnt exist', function(testDone) {
-    var bewit = Hawk.uri.getBewit('http://example.com:8080/foobar', {
+  it("should call done with false when the id doesnt exist", function (testDone) {
+    var bewit = Hawk.uri.getBewit("http://example.com:8080/foobar", {
       credentials: {
-        id: '321321',
-        key: 'dsa',
-        algorithm: 'sha256'
+        id: "321321",
+        key: "dsa",
+        algorithm: "sha256",
       },
-      ttlSec: 60 * 5
+      ttlSec: 60 * 5,
     });
 
-    var req = {
+    var req = buildRequest({
       headers: {
-        host: 'example.com:8080'
+        host: "example.com:8080",
       },
-      method: 'GET',
-      url: '/resource/4?filter=a&bewit=' + bewit
-    };
+      method: "GET",
+      url: "/resource/4?filter=a&bewit=" + bewit,
+    });
 
-    strategy.error = function(challenge) {
-      challenge.message.should.eql('Unknown credentials');
+    strategy.error = function (challenge) {
+      challenge.message.should.eql("Unknown credentials");
       testDone();
     };
     strategy.authenticate(req);
   });
 
-  it('should call fail when url doesnt have a bewit', function(testDone) {
-
-    var req = {
+  it("should call fail when url doesnt have a bewit", function (testDone) {
+    var req = buildRequest({
       headers: {
-        host: 'example.com:8080'
+        host: "example.com:8080",
       },
-      method: 'GET',
-      url: '/resource/4?filter=a'
-    };
+      method: "GET",
+      url: "/resource/4?filter=a",
+    });
 
-    strategy.fail = function(failure) {
-      failure.should.eql('Missing authentication tokens');
+    strategy.fail = function (failure) {
+      failure.should.eql("Missing authentication tokens");
       testDone();
     };
     strategy.authenticate(req);
